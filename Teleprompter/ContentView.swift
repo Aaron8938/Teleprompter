@@ -1,80 +1,70 @@
-//
-//  ContentView.swift
-//  Teleprompter
-//
-//  Created by Aaron Deng on 2026/6/17.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @AppStorage("scriptText") var scriptText = ""
+    @State private var showPlayer = false
+    @StateObject private var playerVM = PlayerViewModel()
+    @FocusState private var isFocused: Bool
 
     var body: some View {
-        NavigationViewWrapper {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
-            .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
+        ZStack {
+            Color.white.ignoresSafeArea()
+
+            if showPlayer {
+                PlayerView(viewModel: playerVM, scriptText: scriptText, onExit: {
+                    showPlayer = false
+                })
+            } else {
+                editorView
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: showPlayer)
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
+    private var editorView: some View {
+        ZStack(alignment: .bottom) {
+            // 全屏文本编辑器 — 无边距限制
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $scriptText)
+                    .font(.system(size: 18))
+                    .scrollContentBackground(.hidden)
+                    .focused($isFocused)
+                    .foregroundStyle(.primary)
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+                if scriptText.isEmpty && !isFocused {
+                    Text("Paste your script...")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                }
             }
-        }
-    }
-}
+            .ignoresSafeArea(edges: .top)
 
-fileprivate struct NavigationViewWrapper<Content: View>: View {
-    let content: () -> Content
-
-    var body: some View {
-#if os(macOS)
-        NavigationSplitView {
-            content()
-        } detail: {
-            Text("Select an item")
+            // 悬浮液体玻璃开始按钮
+            Button {
+                guard !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                playerVM.stop()
+                showPlayer = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.fill")
+                    Text("Start")
+                }
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(maxWidth: 280)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 24)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular, in: Capsule())
+            .disabled(scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .padding(.bottom, 30)
         }
-#else
-        content()
-#endif
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
