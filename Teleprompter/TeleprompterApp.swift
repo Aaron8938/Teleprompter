@@ -13,6 +13,7 @@ struct TeleprompterApp: App {
             ContentView()
         }
         #if os(macOS)
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 500, height: 600)
         #endif
     }

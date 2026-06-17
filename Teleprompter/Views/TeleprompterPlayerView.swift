@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 
-// 测量文字实际高度
+// MARK: - 测量文字高度
 private struct TextHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -9,98 +9,149 @@ private struct TextHeightKey: PreferenceKey {
     }
 }
 
+// MARK: - macOS 触控板/鼠标滚轮事件捕获
+#if os(macOS)
+struct ScrollWheelCapture: NSViewRepresentable {
+    var onScroll: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ScrollWheelView {
+        let view = ScrollWheelView()
+        view.onScroll = onScroll
+        return view
+    }
+
+    func updateNSView(_ nsView: ScrollWheelView, context: Context) {
+        nsView.onScroll = onScroll
+    }
+
+    final class ScrollWheelView: NSView {
+        var onScroll: ((CGFloat) -> Void)?
+
+        override func scrollWheel(with event: NSEvent) {
+            onScroll?(event.deltaY)
+        }
+    }
+}
+#endif
+
+// MARK: - 播放器视图
 struct PlayerView: View {
     @ObservedObject var viewModel: PlayerViewModel
     let scriptText: String
     var onExit: (() -> Void)?
 
+    // MARK: 滚动状态
     @State private var scrollY: CGFloat = 0
     @State private var textHeight: CGFloat = 0
     @State private var viewHeight: CGFloat = 0
+    @State private var viewWidth: CGFloat = 0
+    @State private var dragStartScrollY: CGFloat = 0
+
+    // MARK: 行数据
+    @State private var lines: [String] = []
+    @State private var currentLineIndex: Int = 0
+
     private let timer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
+    // MARK: 计算属性
+
     private var topPadding: CGFloat { max(viewHeight * 0.6, 100) }
+
     private var maxScrollY: CGFloat {
         guard textHeight > 1, viewHeight > 0 else { return 0 }
-        return max(textHeight + topPadding - viewHeight * 0.4, 0)
+        return max(textHeight - viewHeight * 0.4, 0)
     }
+
     private var progress: Double {
         guard maxScrollY > 0 else { return 0 }
         return min(Double(scrollY / maxScrollY), 1.0)
     }
 
+    // MARK: Body
+
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.black
+                .ignoresSafeArea(.all)
 
             // 文字层
             GeometryReader { geo in
-                let topPad = max(geo.size.height * 0.6, 100)
 
-                ZStack(alignment: .trailing) {
-                    // 滚动文字
-                    VStack(spacing: 0) {
-                        Text(scriptText)
+                VStack(spacing: viewModel.fontSize * 0.25) {
+                    Rectangle()
+                        .fill(.clear)
+                        .frame(height: topPadding)
+
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                        Text(line.isEmpty ? " " : line)
                             .font(.system(size: viewModel.fontSize, weight: .bold))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.center)
-                            .lineSpacing(viewModel.fontSize * 0.25)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 48)
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(width: geo.size.width - 96)
-                            .background(
-                                GeometryReader { textGeo in
-                                    Color.clear.preference(
-                                        key: TextHeightKey.self,
-                                        value: textGeo.size.height
-                                    )
-                                }
-                            )
-                            .padding(.top, topPad)
-
-                        Rectangle().fill(.clear).frame(height: geo.size.height)
-                    }
-                    .offset(y: -scrollY)
-
-                    // 进度条
-                    if maxScrollY > 0 {
-                        Capsule()
-                            .fill(.white.opacity(0.15))
-                            .frame(width: 3, height: geo.size.height * 0.3)
-                            .overlay(alignment: .top) {
-                                Capsule()
-                                    .fill(.white.opacity(0.7))
-                                    .frame(width: 3, height: geo.size.height * 0.3 * progress)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                jumpToLine(index)
                             }
-                            .padding(.trailing, 10)
                     }
+
+                    Rectangle()
+                        .fill(.clear)
+                        .frame(height: geo.size.height)
                 }
-                .clipped()
+                .background(
+                    GeometryReader { textGeo in
+                        Color.clear.preference(
+                            key: TextHeightKey.self,
+                            value: textGeo.size.height
+                        )
+                    }
+                )
+                .offset(y: -scrollY)
+                .gesture(dragGesture)
             }
-            .allowsHitTesting(false)
-            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { newHeight in
-                viewHeight = newHeight
-            }
-            .onPreferenceChange(TextHeightKey.self) { h in
-                textHeight = h
+            .clipped()
+            .ignoresSafeArea(.all)
+            .allowsHitTesting(true)
+            #if os(macOS)
+            .overlay(
+                ScrollWheelCapture { delta in
+                    guard !viewModel.isPlaying else { return }
+                    scrollY = max(0, min(scrollY - delta * 3.0, maxScrollY))
+                }
+            )
+            #endif
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { viewHeight = $0 }
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { viewWidth = $0 }
+            .onPreferenceChange(TextHeightKey.self) { textHeight = $0 }
+
+            // 进度条
+            if maxScrollY > 0 {
+                HStack {
+                    Spacer()
+                    Capsule()
+                        .fill(.white.opacity(0.15))
+                        .frame(width: 3, height: viewHeight * 0.4)
+                        .overlay(alignment: .top) {
+                            Capsule()
+                                .fill(.white.opacity(0.55))
+                                .frame(width: 3, height: viewHeight * 0.4 * progress)
+                        }
+                        .padding(.trailing, 12)
+                        .offset(y: -20)
+                }
+                .allowsHitTesting(false)
             }
 
-            // 倒计时
-            if viewModel.countdownRemaining > 0 {
-                Text("\(viewModel.countdownRemaining)")
-                    .font(.system(size: 120, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .transition(.opacity.combined(with: .scale))
-                    .animation(.easeOut(duration: 0.3), value: viewModel.countdownRemaining)
-            }
-
-            // 底部控制栏（包含退出按钮，所有控件融合在一起）
+            // 底部控制栏
             VStack {
                 Spacer()
                 bottomBar
             }
         }
         .onReceive(timer) { _ in
-            guard viewModel.isPlaying else { return }
+            guard viewModel.isPlaying, !viewModel.isManualScrolling else { return }
             scrollY += viewModel.scrollSpeed / 60.0
             if maxScrollY > 0 && scrollY >= maxScrollY {
                 scrollY = maxScrollY
@@ -108,117 +159,159 @@ struct PlayerView: View {
             }
         }
         .onAppear {
+            lines = viewModel.computeLines(from: scriptText)
             scrollY = 0
             textHeight = 0
+            currentLineIndex = 0
             viewModel.stop()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                viewModel.startCountdown()
-            }
+            setBlackBackground()
+            viewModel.isPlaying = true
         }
+        .onDisappear {
+            restoreWhiteBackground()
+        }
+        // 键盘快捷键
         .onKeyPress(.space) { viewModel.togglePlayPause(); return .handled }
-        .onKeyPress(.escape) { viewModel.stop(); scrollY = 0; onExit?(); return .handled }
+        .onKeyPress(.escape) { exitPlayer(); return .handled }
         .onKeyPress(.upArrow) { viewModel.scrollSpeed = min(viewModel.scrollSpeed + 5, 150); return .handled }
         .onKeyPress(.downArrow) { viewModel.scrollSpeed = max(viewModel.scrollSpeed - 5, 5); return .handled }
         .onKeyPress(.leftArrow) { viewModel.fontSize = max(viewModel.fontSize - 4, 16); return .handled }
         .onKeyPress(.rightArrow) { viewModel.fontSize = min(viewModel.fontSize + 4, 120); return .handled }
     }
 
-    // MARK: - 底部控制栏 — 退出 + 字号 + 速度 + 播放，全部融合在一个玻璃圆角矩形
+    // MARK: 拖拽手势（暂停时可拖动）
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                guard !viewModel.isPlaying else { return }
+                if !viewModel.isManualScrolling {
+                    dragStartScrollY = scrollY
+                    viewModel.isManualScrolling = true
+                }
+                let newY = dragStartScrollY - value.translation.height
+                scrollY = max(0, min(newY, maxScrollY))
+            }
+            .onEnded { _ in
+                viewModel.isManualScrolling = false
+            }
+    }
+
+    // MARK: 行跳转（暂停时不自动播放）
+
+    private func jumpToLine(_ index: Int) {
+        guard index < lines.count else { return }
+        let containerWidth = viewWidth > 0 ? viewWidth - 96 : 400
+        let targetY = viewModel.scrollYForLine(
+            index,
+            lines: lines,
+            containerWidth: containerWidth,
+            topPadding: topPadding
+        )
+        let adjustedY = max(0, min(targetY - viewHeight * 0.15, maxScrollY))
+        withAnimation(.easeOut(duration: 0.35)) {
+            scrollY = adjustedY
+        }
+        currentLineIndex = index
+        viewModel.isManualScrolling = false
+        // 暂停时不自动播放，播放中保持不变
+    }
+
+    // MARK: 退出
+
+    private func exitPlayer() {
+        viewModel.stop()
+        scrollY = 0
+        restoreWhiteBackground()
+        onExit?()
+    }
+
+    // MARK: 窗口背景切换（fullSizeContentView 已由 ContentView 设置）
+
+    private func setBlackBackground() {
+        #if os(macOS)
+        guard let window = NSApplication.shared.windows.first(
+            where: { $0.isKeyWindow }
+        ) ?? NSApplication.shared.keyWindow
+        else { return }
+        window.backgroundColor = .black
+        #endif
+    }
+
+    private func restoreWhiteBackground() {
+        #if os(macOS)
+        guard let window = NSApplication.shared.windows.first(
+            where: { $0.isKeyWindow }
+        ) ?? NSApplication.shared.keyWindow
+        else { return }
+        window.backgroundColor = NSColor(white: 0.97, alpha: 1)
+        #endif
+    }
+
+    // MARK: 底部控制栏
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
-            // 退出
-            Button {
-                viewModel.stop()
-                scrollY = 0
-                onExit?()
-            } label: {
+            Button { exitPlayer() } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("退出")
 
-            // 分隔线
-            Rectangle()
-                .fill(.white.opacity(0.15))
-                .frame(width: 1, height: 24)
-                .padding(.horizontal, 6)
+            separator
 
-            // 字号控制
-            Button {
-                viewModel.fontSize = max(viewModel.fontSize - 4, 16)
-            } label: {
+            Button { viewModel.fontSize = max(viewModel.fontSize - 4, 16) } label: {
                 Image(systemName: "textformat.size.smaller")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("减小字号")
 
             Text("\(Int(viewModel.fontSize))")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.white)
                 .frame(width: 28)
 
-            Button {
-                viewModel.fontSize = min(viewModel.fontSize + 4, 120)
-            } label: {
+            Button { viewModel.fontSize = min(viewModel.fontSize + 4, 120) } label: {
                 Image(systemName: "textformat.size.larger")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("增大字号")
 
-            // 分隔线
-            Rectangle()
-                .fill(.white.opacity(0.15))
-                .frame(width: 1, height: 24)
-                .padding(.horizontal, 6)
+            separator
 
-            // 速度控制
-            Button {
-                viewModel.scrollSpeed = max(viewModel.scrollSpeed - 5, 5)
-            } label: {
+            Button { viewModel.scrollSpeed = max(viewModel.scrollSpeed - 5, 5) } label: {
                 Image(systemName: "minus")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("减速")
 
             Text("\(Int(viewModel.scrollSpeed))")
                 .font(.subheadline.monospacedDigit().weight(.medium))
                 .foregroundStyle(.white)
                 .frame(width: 32)
 
-            Button {
-                viewModel.scrollSpeed = min(viewModel.scrollSpeed + 5, 150)
-            } label: {
+            Button { viewModel.scrollSpeed = min(viewModel.scrollSpeed + 5, 150) } label: {
                 Image(systemName: "plus")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("加速")
 
-            // 分隔线
-            Rectangle()
-                .fill(.white.opacity(0.15))
-                .frame(width: 1, height: 24)
-                .padding(.horizontal, 6)
+            separator
 
-            // 播放/暂停
             Button {
                 if !viewModel.isPlaying && scrollY >= maxScrollY && maxScrollY > 0 {
                     scrollY = 0
+                    currentLineIndex = 0
                 }
                 viewModel.togglePlayPause()
             } label: {
@@ -228,12 +321,18 @@ struct PlayerView: View {
                     .frame(width: 44, height: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(viewModel.isPlaying ? "暂停" : "播放")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
         .padding(.horizontal, 20)
         .padding(.bottom, 32)
+    }
+
+    private var separator: some View {
+        Rectangle()
+            .fill(.white.opacity(0.15))
+            .frame(width: 1, height: 24)
+            .padding(.horizontal, 6)
     }
 }

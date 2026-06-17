@@ -35,6 +35,7 @@ fastlane/test_output
 
 # WorkBuddy
 .workbuddy/
+.opencode/
 AGENTS.md
 SOUL.md
 IDENTITY.md
@@ -43,6 +44,7 @@ HEARTBEAT.md
 TOOLS.md
 .autoclaw-attachments/
 .openclaw/
+config/
 
 # macOS
 .DS_Store

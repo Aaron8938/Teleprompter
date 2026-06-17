@@ -4,14 +4,16 @@ A clean, cross-platform teleprompter app for iOS and macOS built with SwiftUI.
 
 ## Features
 
-- **Script Editor** — paste or type your script with full-screen editing
-- **Smooth Scrolling** — 60fps auto-scroll playback with adjustable speed
-- **3-2-1 Countdown** — animated countdown before playback starts
-- **Progress Bar** — subtle vertical indicator showing reading progress
+- **Script Editor** — paste or type your script with full-screen editing, styled placeholder
+- **Smooth Scrolling** — 60fps auto-scroll playback with adjustable speed, starts immediately
+- **Line Navigation** — tap any line to jump directly; paused scrolling stays paused
+- **Manual Scrolling** — drag or trackpad/mouse wheel to scroll freely when paused
+- **Progress Bar** — subtle vertical indicator showing reading position
 - **Adjustable Font Size** — 16pt to 120pt, persisted across app launches
 - **Playback Controls** — play/pause, speed, font size all in a glass-effect toolbar
 - **Keyboard Shortcuts** — full control without touching the mouse (Space, Escape, Arrow keys)
 - **Auto-Save** — your script is automatically saved and restored
+- **macOS Native** — hidden titlebar, fullSizeContentView, movable by window background
 
 | Key | Action |
 |-----|--------|
@@ -32,6 +34,7 @@ A clean, cross-platform teleprompter app for iOS and macOS built with SwiftUI.
 Teleprompter/
 ├── TeleprompterApp.swift          # @main entry point
 ├── ContentView.swift              # Script editor
+├── CenteredTextEditor.swift       # macOS native text editor
 ├── AppIconProvider.swift          # macOS icon fix (conditional)
 ├── Views/
 │   └── TeleprompterPlayerView.swift   # Player UI
