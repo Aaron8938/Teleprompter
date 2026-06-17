@@ -4,16 +4,22 @@ A clean, cross-platform teleprompter app for iOS and macOS built with SwiftUI.
 
 ## Features
 
-- **Script Editor** — paste or type your script with full-screen editing, styled placeholder
-- **Smooth Scrolling** — 60fps auto-scroll playback with adjustable speed, starts immediately
-- **Line Navigation** — tap any line to jump directly; paused scrolling stays paused
-- **Manual Scrolling** — drag or trackpad/mouse wheel to scroll freely when paused
-- **Progress Bar** — subtle vertical indicator showing reading position
-- **Adjustable Font Size** — 16pt to 120pt, persisted across app launches
-- **Playback Controls** — play/pause, speed, font size all in a glass-effect toolbar
-- **Keyboard Shortcuts** — full control without touching the mouse (Space, Escape, Arrow keys)
-- **Auto-Save** — your script is automatically saved and restored
-- **macOS Native** — hidden titlebar, fullSizeContentView, movable by window background
+| Feature | macOS | iOS |
+|---------|-------|-----|
+| Script Editor | ✅ CenteredTextEditor (NSTextView) | ✅ TextEditor + keyboard toolbar |
+| Keyboard Toolbar | — | "Done" dismiss + "Start" enter player |
+| Playback Start | Immediate | Immediate (or from keyboard toolbar) |
+| Progress Bar | Right-side vertical capsule | Top thin line |
+| Control Bar | Glass capsule, compact layout | Apple Music-style wide Capsule |
+| Top Area | fullSizeContentView, transparent titlebar | Gradient + fade mask blending into status bar |
+| Line Navigation | Tap to jump | Tap to jump (multi-line only) |
+| Manual Scrolling | Trackpad wheel / drag | Touch drag |
+| Font Size | 16-120pt (Arrow keys) | 16-120pt |
+| Scroll Speed | 5-150 (Arrow keys) | 5-150 |
+| Auto-Save | @AppStorage | @AppStorage |
+| macOS Native | hiddenTitleBar, movableByWindowBackground | — |
+
+## Keyboard Shortcuts (macOS)
 
 | Key | Action |
 |-----|--------|

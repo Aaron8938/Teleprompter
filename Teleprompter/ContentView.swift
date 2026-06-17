@@ -4,11 +4,10 @@ struct ContentView: View {
     @AppStorage("scriptText") var scriptText = ""
     @State private var showPlayer = false
     @StateObject private var playerVM = PlayerViewModel()
-    @State private var isFocused = false
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         ZStack {
-            // 背景渐变
             editorBackground
                 .ignoresSafeArea(.all)
 
@@ -23,12 +22,10 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showPlayer)
-        .onAppear {
-            setupWindow()
-        }
+        .onAppear { setupWindow() }
     }
 
-    // MARK: - 编辑器背景
+    // MARK: - 背景
 
     private var editorBackground: some View {
         LinearGradient(
@@ -42,7 +39,7 @@ struct ContentView: View {
         )
     }
 
-    // MARK: - 编辑器主体
+    // MARK: - 编辑器
 
     private var editorView: some View {
         ZStack(alignment: .bottom) {
@@ -50,35 +47,67 @@ struct ContentView: View {
             CenteredTextEditor(text: $scriptText)
                 .ignoresSafeArea(.all)
             #else
-            // iOS: 仅忽略底部安全区保留滚动沉浸感，顶部尊重状态栏/灵动岛
-            ZStack(alignment: .center) {
-                TextEditor(text: $scriptText)
-                    .font(.system(size: 20, design: .serif))
-                    .lineSpacing(8)
-                    .scrollContentBackground(.hidden)
-                    .foregroundStyle(Color(white: 0.2))
-
-                if scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    placeholderContent
-                }
-            }
-            .ignoresSafeArea(edges: .bottom)
+            TextEditor(text: $scriptText)
+                .font(.system(size: 20, design: .serif))
+                .lineSpacing(8)
+                .scrollContentBackground(.hidden)
+                .foregroundStyle(Color(white: 0.2))
+                .ignoresSafeArea(edges: .bottom)
+                .scrollDismissesKeyboard(.interactively)
+                .focused($isFocused)
+                .toolbar { keyboardToolbar }
             #endif
 
-            // 占位文字（macOS 用 overlay 方式）
-            #if os(macOS)
-            if scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                placeholderContent
-                    .allowsHitTesting(false)
+            // 占位文字
+            if scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isFocused {
+                placeholderContent.allowsHitTesting(false)
             }
-            #endif
 
-            // 开始按钮
-            startButton
-                .padding(.bottom, 30)
+            // 开始按钮 — 键盘弹出时隐藏
+            #if os(iOS)
+            if !isFocused {
+                startButton.padding(.bottom, 30)
+            }
+            #else
+            startButton.padding(.bottom, 30)
+            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    // MARK: - iOS 键盘工具栏（液态玻璃胶囊）
+
+    #if os(iOS)
+    @ToolbarContentBuilder
+    private var keyboardToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button {
+                dismissKeyboard()
+                if !scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    playerVM.stop()
+                    showPlayer = true
+                }
+            } label: {
+                Text("Start")
+                    .font(.body.weight(.semibold))
+            }
+            .disabled(scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Spacer()
+            Button("Done") {
+                dismissKeyboard()
+            }
+            .font(.body.weight(.bold))
+        }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
+    }
+    #endif
 
     // MARK: - 占位内容
 
@@ -94,7 +123,7 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - 开始按钮（液态玻璃，全控件可点击）
+    // MARK: - 开始按钮
 
     private var startButton: some View {
         Button {
@@ -114,7 +143,6 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .glassEffect(.regular, in: Capsule())
-        .scaleEffect(scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.96 : 1.0)
         .opacity(scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1.0)
         .animation(.easeOut(duration: 0.25), value: scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .disabled(scriptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -125,15 +153,9 @@ struct ContentView: View {
     private func setupWindow() {
         #if os(macOS)
         guard let window = NSApplication.shared.windows.first else { return }
-        // .hiddenTitleBar 已处理 fullSizeContentView + transparent titlebar
-        // 只需微调外观
         window.titlebarSeparatorStyle = .none
         window.backgroundColor = NSColor(white: 0.97, alpha: 1)
         window.isMovableByWindowBackground = true
         #endif
     }
-}
-
-#Preview {
-    ContentView()
 }
