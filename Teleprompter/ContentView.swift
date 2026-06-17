@@ -50,6 +50,7 @@ struct ContentView: View {
             CenteredTextEditor(text: $scriptText)
                 .ignoresSafeArea(.all)
             #else
+            // iOS: 仅忽略底部安全区保留滚动沉浸感，顶部尊重状态栏/灵动岛
             ZStack(alignment: .center) {
                 TextEditor(text: $scriptText)
                     .font(.system(size: 20, design: .serif))
@@ -61,7 +62,7 @@ struct ContentView: View {
                     placeholderContent
                 }
             }
-            .ignoresSafeArea(.all)
+            .ignoresSafeArea(edges: .bottom)
             #endif
 
             // 占位文字（macOS 用 overlay 方式）

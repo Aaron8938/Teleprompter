@@ -112,7 +112,13 @@ struct PlayerView: View {
                 .gesture(dragGesture)
             }
             .clipped()
+            #if os(iOS)
+            // iOS: 尊重顶部安全区（状态栏/灵动岛），底部留空间给控制栏
+            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 80) }
+            #else
+            // macOS: 铺满整个窗口
             .ignoresSafeArea(.all)
+            #endif
             .allowsHitTesting(true)
             #if os(macOS)
             .overlay(
@@ -256,7 +262,8 @@ struct PlayerView: View {
                 Image(systemName: "xmark")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -266,7 +273,8 @@ struct PlayerView: View {
                 Image(systemName: "textformat.size.smaller")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -279,7 +287,8 @@ struct PlayerView: View {
                 Image(systemName: "textformat.size.larger")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -289,7 +298,8 @@ struct PlayerView: View {
                 Image(systemName: "minus")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -302,7 +312,8 @@ struct PlayerView: View {
                 Image(systemName: "plus")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -318,7 +329,8 @@ struct PlayerView: View {
                 Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
                     .font(.title2.weight(.medium))
                     .foregroundStyle(.white)
-                    .frame(width: 44, height: 40)
+                    .frame(width: 48, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -326,7 +338,11 @@ struct PlayerView: View {
         .padding(.vertical, 8)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
         .padding(.horizontal, 20)
+        #if os(iOS)
+        .padding(.bottom, 8)
+        #else
         .padding(.bottom, 32)
+        #endif
     }
 
     private var separator: some View {
